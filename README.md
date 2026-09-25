@@ -40,9 +40,10 @@ The `gl` variant runs Skia's Ganesh backend on the OpenGL that AROS exposes
 through GLA (`<GL/gla.h>`). The `GrGLInterface` is assembled from
 `glAGetProcAddress`; no EGL or libepoxy is involved. On the tested systems GL
 is Mesa 20.0.8 **softpipe, a software rasteriser**: this is not hardware
-acceleration. In two runs of one benchmark (10 frames of the example scene)
-Ganesh was about 14x and about 24x slower than Skia's own CPU raster backend.
-Those are two measurements of one scene, not a general performance figure.
+acceleration. In the recorded runs of one benchmark (10 frames of the example scene)
+Ganesh was about 14x to 24x slower than Skia's own CPU raster backend
+([docs/testing.md](docs/testing.md)). Those are measurements of one scene,
+not a general performance figure.
 No hardware GL driver has been tested. GL programs need a large stack
 (`Stack 8000000` in the Shell before running them).
 
@@ -170,5 +171,5 @@ their own licences, installed under `share/licenses/` in every SDK package:
 HarfBuzz (MIT), libjpeg-turbo (IJG, BSD-3-Clause, zlib), libwebp
 (BSD-3-Clause with a patent grant). The test fonts in `examples/m154/fonts`
 are Bitstream Vera and Source Sans 3 (SIL OFL 1.1), with their licences. The
-build scripts, patches and documentation of this repository are under the
-licence in [LICENSE](LICENSE).
+port itself (build scripts, patches, examples and documentation of this
+repository) is BSD-3-Clause, like Skia; see [LICENSE](LICENSE).
