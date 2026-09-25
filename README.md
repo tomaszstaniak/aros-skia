@@ -41,7 +41,7 @@ through GLA (`<GL/gla.h>`). The `GrGLInterface` is assembled from
 `glAGetProcAddress`; no EGL or libepoxy is involved. On the tested systems GL
 is Mesa 20.0.8 **softpipe, a software rasteriser**: this is not hardware
 acceleration. In the recorded runs of one benchmark (10 frames of the example scene)
-Ganesh was about 14x to 24x slower than Skia's own CPU raster backend
+Ganesh was between about 14x and 36x slower than Skia's own CPU raster backend
 ([docs/testing.md](docs/testing.md)). Those are measurements of one scene,
 not a general performance figure.
 No hardware GL driver has been tested. GL programs need a large stack
