@@ -20,7 +20,10 @@ fi
 rm -rf "$M154_BUILD"
 mkdir -p "$M154_BUILD"
 FLAGS=(--sysroot="$AROS_SDK" -std=c++20 $(m154_opt_flags) -fno-exceptions -fno-rtti -w
-       -I "$M154_WORK")
+       -I "$M154_WORK"
+       # No build-machine paths in __FILE__ strings or debug info.
+       -ffile-prefix-map="$PROJECT_ROOT"=. -ffile-prefix-map="$M154_WORK"=skia -ffile-prefix-map="$AROS_SDK"=aros-sdk
+       -ffile-prefix-map="$AROS_GCC13_ROOT"=aros-gcc -ffile-prefix-map="$DEPS_PREFIX"=deps)
 while read -r d; do FLAGS+=("-D$d"); done < <(m154_public_defs; m154_private_defs)
 if [ "$M154_VARIANT" != raster ]; then FLAGS+=(-I "$DEPS_PREFIX/include"); fi
 printf '%s\n' "${FLAGS[@]}" >"$M154_BUILD/flags.txt"

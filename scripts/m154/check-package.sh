@@ -12,6 +12,9 @@ TGZ="$M154_DIST/$NAME.tar.gz"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/skia-m154-pkg.XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT
 tar -C "$TMP" -xzf "$TGZ"
+# A package must not carry the build machine's paths, in text or in binaries.
+leaks=$(for f in $(find "$TMP/$NAME" -type f); do strings -a "$f" | grep -E "^/(Users|home|Volumes|private|tmp)/" | sed "s|^|${f#$TMP/}: |"; done | head -5)
+if [ -n "$leaks" ]; then echo "check-package: host paths in $NAME:" >&2; echo "$leaks" >&2; exit 1; fi
 OUT="${1:-$M154_BUILD/package-examples}"
 M154_PREFIX="$TMP/$NAME" "$(dirname "$0")/check-install.sh" "$TMP/$NAME" "$OUT"
 echo "check-package: $NAME ok"

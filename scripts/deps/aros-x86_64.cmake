@@ -24,6 +24,11 @@ set(CMAKE_STRIP        "$ENV{AROS_STRIP}" CACHE FILEPATH "" FORCE)
 set(CMAKE_SYSROOT "$ENV{AROS_SDK}")
 # GCC 13.4 needs its specs file on every link (DEPS_LINK_FLAGS).
 set(CMAKE_EXE_LINKER_FLAGS_INIT "$ENV{DEPS_LINK_FLAGS}")
+# Keep build-machine paths out of __FILE__ strings and debug info, so the
+# archives do not carry the builder's directory layout.
+set(_aros_prefix_map "-ffile-prefix-map=$ENV{DEPS_ROOT}=. -ffile-prefix-map=$ENV{DEPS_WORK}=deps -ffile-prefix-map=$ENV{DEPS_BUILD}=deps-build -ffile-prefix-map=$ENV{AROS_SDK}=aros-sdk -ffile-prefix-map=$ENV{AROS_GCC_ROOT}=aros-gcc")
+set(CMAKE_C_FLAGS_INIT "${_aros_prefix_map}")
+set(CMAKE_CXX_FLAGS_INIT "${_aros_prefix_map}")
 set(CMAKE_FIND_ROOT_PATH "$ENV{AROS_SDK}" "$ENV{DEPS_PREFIX}")
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
