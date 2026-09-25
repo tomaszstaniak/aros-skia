@@ -1,0 +1,91 @@
+Title: 0002-aros-list-and-nprocessors
+Repository: skia
+Base-Commit: 588b550a4dd8af90dbe71c0554852806bd8f0b21
+Requires: 0001-aros-posix-file-memory.patch
+Author: aros-skia
+Date: 2026-09-20
+Upstream-Status: candidate
+Scope: AROS x86_64 ABIv11 CPU Skia core. Not checked on mainline v1.
+
+Problem:
+  ABIv11 pthread.h pulls exec/lists.h (struct List), so Skia's file-scope using List collides. posixc has no _SC_NPROCESSORS_ONLN, which SkExecutor uses for the thread pool size.
+Solution:
+  Qualify SkIDChangeListener::List. On AROS, size the pool with std::thread::hardware_concurrency (1 if that returns 0) instead of sysconf.
+Validation:
+  AROS x86_64 ABIv11, GCC 13.4.0: SkIDChangeListener.cpp and SkExecutor.cpp
+  compile; the examples pass on AROS One (docs/testing.md).
+Removal:
+  List qualification is permanent while pthread.h pulls exec/lists.h.
+  hardware_concurrency stays until posixc defines _SC_NPROCESSORS_ONLN.
+  Not checked on mainline v1.
+
+diff --git a/src/core/SkExecutor.cpp b/src/core/SkExecutor.cpp
+index 4c97f7ffc2..d82a76cabc 100644
+--- a/src/core/SkExecutor.cpp
++++ b/src/core/SkExecutor.cpp
+@@ -24,6 +24,12 @@ using namespace skia_private;
+         GetNativeSystemInfo(&sysinfo);
+         return (int)sysinfo.dwNumberOfProcessors;
+     }
++#elif defined(__AROS__)
++    // posixc unistd.h has no _SC_NPROCESSORS_ONLN.
++    static int num_cores() {
++        unsigned n = std::thread::hardware_concurrency();
++        return n > 0 ? (int)n : 1;
++    }
+ #else
+     #include <unistd.h>
+     static int num_cores() {
+diff --git a/src/core/SkIDChangeListener.cpp b/src/core/SkIDChangeListener.cpp
+index cc357efbab..2bdae034b9 100644
+--- a/src/core/SkIDChangeListener.cpp
++++ b/src/core/SkIDChangeListener.cpp
+@@ -22,11 +22,11 @@ SkIDChangeListener::SkIDChangeListener() : fShouldDeregister(false) {}
+ 
+ SkIDChangeListener::~SkIDChangeListener() = default;
+ 
+-using List = SkIDChangeListener::List;
++// Do not `using List = SkIDChangeListener::List` at file scope: AROS
++// pthread.h includes exec/lists.h, which defines struct List.
++SkIDChangeListener::List::List() = default;
+ 
+-List::List() = default;
+-
+-List::~List() {
++SkIDChangeListener::List::~List() {
+     // We don't need the mutex. No other thread should have this list while it's being
+     // destroyed.
+     for (auto& listener : fListeners) {
+@@ -36,7 +36,7 @@ List::~List() {
+     }
+ }
+ 
+-void List::add(sk_sp<SkIDChangeListener> listener) {
++void SkIDChangeListener::List::add(sk_sp<SkIDChangeListener> listener) {
+     if (!listener) {
+         return;
+     }
+@@ -52,12 +52,12 @@ void List::add(sk_sp<SkIDChangeListener> listener) {
+     fListeners.push_back(std::move(listener));
+ }
+ 
+-int List::count() const {
++int SkIDChangeListener::List::count() const {
+     SkAutoMutexExclusive lock(fMutex);
+     return fListeners.size();
+ }
+ 
+-void List::changed() {
++void SkIDChangeListener::List::changed() {
+     SkAutoMutexExclusive lock(fMutex);
+     for (auto& listener : fListeners) {
+         if (!listener->shouldDeregister()) {
+@@ -67,7 +67,7 @@ void List::changed() {
+     fListeners.clear();
+ }
+ 
+-void List::reset() {
++void SkIDChangeListener::List::reset() {
+     SkAutoMutexExclusive lock(fMutex);
+     fListeners.clear();
+ }

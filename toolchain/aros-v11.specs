@@ -1,0 +1,6 @@
+*lib:
+-lmui -larossupport -lamiga %{!noclibs: -lm -lstdlib %{!nostartfiles: -lcrtprog} -lcrt} -lcodesets -lkeymap -lexpansion -lcommodities -ldiskfont -lasl -lmuimaster -ldatatypes -lcybergraphics -lworkbench -licon -lintuition -lgadtools -llayers -laros -lpartition -liffparse -lgraphics -llocale -ldos -lutility %{!nosysbase:-lexec} -lautoinit -llibinit -lpthread --end-group
+
+*startfile:
+startup%O%s %{detach:detach%O%s} %{nix:nixmain%O%s} %{static-libstdc++:static-cxx-ops%O%s static-cxx-personality%O%s static-cxx-cxa-pure-virtual%O%s}
+

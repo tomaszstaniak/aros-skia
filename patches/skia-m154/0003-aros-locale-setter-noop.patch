@@ -1,0 +1,49 @@
+Title: 0003-aros-locale-setter-noop
+Repository: skia
+Base-Commit: 588b550a4dd8af90dbe71c0554852806bd8f0b21
+Requires: 0001-aros-posix-file-memory.patch
+Author: aros-skia
+Date: 2026-09-24
+Upstream-Status: candidate
+Scope: src/core/SkAutoLocaleSetter.h. AROS x86_64 ABIv11. Not checked on mainline v1.
+
+Problem:
+  SkAutoLocaleSetter switches the calling thread to the "C" locale with
+  newlocale(LC_ALL_MASK)/uselocale while Ganesh generates GLSL and
+  SkJSONReader parses numbers, so float formatting uses '.'. ABIv11 posixc
+  declares locale_t but has no newlocale, uselocale, freelocale or
+  LC_ALL_MASK; the file does not compile.
+Solution:
+  Take Skia's existing no-op branch (HAVE_LOCALE_T 0, as for Android,
+  uClibc and newlib). This keeps the class's contract rather than
+  approximating it: AROS stdc formats and parses numbers in the C locale
+  unconditionally. printf's decimal point is the constant "."
+  (compiler/crt/stdc/__vcformat.c: __stdc_char_decimalpoint,
+  FMTPRINTF_DECIMALPOINT) and strtod accepts only '.' (strtod.c), whatever
+  setlocale() was given. Nothing global is changed, so there is no
+  cross-thread effect; a process-wide setlocale() substitute was rejected
+  for exactly that reason.
+Validation:
+  GCC 13.4.0, ABIv11 SDK: the users of SkAutoLocaleSetter.h
+  (GrGLProgramBuilder.cpp, SkJSONReader.cpp) compile, and the gl example,
+  which generates GLSL through GrGLProgramBuilder, passes on AROS One.
+  Source references checked in deadwood2/AROS e33ca77d.
+Removal:
+  When posixc provides newlocale/uselocale, or when AROS stdc gains a
+  locale-dependent decimal point (then this no-op would become wrong and a
+  real per-thread setter is needed).
+
+diff --git a/src/core/SkAutoLocaleSetter.h b/src/core/SkAutoLocaleSetter.h
+index 4642ca2..89cfa11 100644
+--- a/src/core/SkAutoLocaleSetter.h
++++ b/src/core/SkAutoLocaleSetter.h
+@@ -27,7 +27,8 @@
+ #define HAVE_XLOCALE 0
+ #endif
+ 
+-#if defined(SK_BUILD_FOR_ANDROID) || defined(__UCLIBC__) || defined(_NEWLIB_VERSION)
++#if defined(SK_BUILD_FOR_ANDROID) || defined(__UCLIBC__) || defined(_NEWLIB_VERSION) || \
++    defined(__AROS__)
+ #define HAVE_LOCALE_T 0
+ #else
+ #define HAVE_LOCALE_T 1

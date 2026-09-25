@@ -1,0 +1,159 @@
+Title: 0001-aros-posix-file-memory
+Repository: skia
+Base-Commit: 588b550a4dd8af90dbe71c0554852806bd8f0b21
+Requires: none
+Author: aros-skia
+Date: 2026-09-20
+Upstream-Status: candidate
+Scope: AROS x86_64 ABIv11 static CPU Skia file and allocator ports. Not dynlib. Not mainline v1.
+
+Problem:
+  The AROS g++ does not define __unix__/__linux__/__APPLE__, so unpatched Skia falls through to SK_BUILD_FOR_MAC. The UNIX file port then needs mmap/pread, and the malloc port needs Linux malloc.h, which this ABI's posixc does not provide. SkData::MakeFromFILE and SkStream random reads require those file operations.
+Solution:
+  Treat AROS as the UNIX port family (confirmed: Mac ports need CoreFoundation). Implement file mapping as malloc+read and pread as fseek/fread. Skip malloc_usable_size and report the requested size. Do not stub dlopen.
+Validation:
+  AROS x86_64 ABIv11, GCC 13.4.0. After this patch SkFeatures selects
+  SK_BUILD_FOR_UNIX (unpatched: SK_BUILD_FOR_MAC). Every translation unit of
+  the raster, codecs and gl variants compiles, and the examples (file and
+  stream reads included) pass on AROS One; see docs/testing.md.
+Removal:
+  Permanent for this AROS CPU port until posixc provides mmap, pread and
+  malloc_usable_size, and SkFeatures can identify AROS without mapping it
+  onto the UNIX family. A successful compile is not a reason to drop it.
+
+diff --git a/include/private/SkFeatures.h b/include/private/SkFeatures.h
+index 9ea8063..a65d24d 100644
+--- a/include/private/SkFeatures.h
++++ b/include/private/SkFeatures.h
+@@ -23,7 +23,7 @@
+         // WASM toolchains expose a Unix-like compilation environment, but it is
+         // not Unix (e.g. posix signals are not supported).
+         #define SK_BUILD_FOR_WASM
+-    #elif defined(linux) || defined(__linux) || defined(__FreeBSD__) || \
++    #elif defined(__AROS__) || defined(linux) || defined(__linux) || defined(__FreeBSD__) || \
+           defined(__OpenBSD__) || defined(__sun) || defined(__NetBSD__) || \
+           defined(__DragonFly__) || defined(__Fuchsia__) || \
+           defined(__GLIBC__) || defined(__GNU__) || defined(__unix__)
+diff --git a/src/ports/SkMemory_malloc.cpp b/src/ports/SkMemory_malloc.cpp
+index 6b2f079..b0e8f99 100644
+--- a/src/ports/SkMemory_malloc.cpp
++++ b/src/ports/SkMemory_malloc.cpp
+@@ -15,6 +15,8 @@
+ 
+ #if defined(SK_BUILD_FOR_MAC) || defined(SK_BUILD_FOR_IOS)
+ #include <malloc/malloc.h>
++#elif defined(__AROS__)
++// AROS has malloc in <cstdlib>, not Linux malloc.h / mallinfo.
+ #elif defined(SK_BUILD_FOR_ANDROID) || defined(SK_BUILD_FOR_UNIX)
+ #include <malloc.h>
+ #elif defined(SK_BUILD_FOR_WIN)
+@@ -126,7 +128,7 @@ size_t sk_malloc_size(void* addr, size_t size) {
+     #elif defined(SK_BUILD_FOR_ANDROID) && __ANDROID_API__ >= 17
+         completeSize = malloc_usable_size(addr);
+         SkASSERT(completeSize >= size);
+-    #elif defined(SK_BUILD_FOR_UNIX)
++    #elif defined(SK_BUILD_FOR_UNIX) && !defined(__AROS__)
+         completeSize = malloc_usable_size(addr);
+         SkASSERT(completeSize >= size);
+     #elif defined(SK_BUILD_FOR_WIN)
+diff --git a/src/ports/SkOSFile_posix.cpp b/src/ports/SkOSFile_posix.cpp
+index 2ec6b25..094c641 100644
+--- a/src/ports/SkOSFile_posix.cpp
++++ b/src/ports/SkOSFile_posix.cpp
+@@ -14,8 +14,11 @@
+ #include <dirent.h>
+ #include <new>
+ #include <stdio.h>
++#include <stdlib.h>
+ #include <string.h>
++#if !defined(__AROS__)
+ #include <sys/mman.h>
++#endif
+ #include <sys/stat.h>
+ #include <sys/types.h>
+ #include <unistd.h>
+@@ -78,7 +81,13 @@ bool sk_fidentical(FILE* a, FILE* b) {
+ }
+ 
+ void sk_fmunmap(const void* addr, size_t length) {
++#if defined(__AROS__)
++    // AROS posixc has no mmap. sk_fdmmap allocates with malloc.
++    (void)length;
++    free(const_cast<void*>(addr));
++#else
+     munmap(const_cast<void*>(addr), length);
++#endif
+ }
+ 
+ void* sk_fdmmap(int fd, size_t* size) {
+@@ -94,10 +103,40 @@ void* sk_fdmmap(int fd, size_t* size) {
+     }
+     size_t fileSize = static_cast<size_t>(status.st_size);
+ 
++#if defined(__AROS__)
++    void* addr = malloc(fileSize);
++    if (!addr) {
++        return nullptr;
++    }
++    off_t old = lseek(fd, 0, SEEK_CUR);
++    if (old < 0) {
++        free(addr);
++        return nullptr;
++    }
++    if (lseek(fd, 0, SEEK_SET) < 0) {
++        free(addr);
++        return nullptr;
++    }
++    size_t got = 0;
++    while (got < fileSize) {
++        ssize_t n = read(fd, static_cast<char*>(addr) + got, fileSize - got);
++        if (n <= 0) {
++            free(addr);
++            lseek(fd, old, SEEK_SET);
++            return nullptr;
++        }
++        got += static_cast<size_t>(n);
++    }
++    if (lseek(fd, old, SEEK_SET) < 0) {
++        free(addr);
++        return nullptr;
++    }
++#else
+     void* addr = mmap(nullptr, fileSize, PROT_READ, MAP_PRIVATE, fd, 0);
+     if (MAP_FAILED == addr) {
+         return nullptr;
+     }
++#endif
+ 
+     *size = fileSize;
+     return addr;
+@@ -117,6 +156,21 @@ void* sk_fmmap(FILE* f, size_t* size) {
+ }
+ 
+ size_t sk_qread(FILE* file, void* buffer, size_t count, size_t offset) {
++#if defined(__AROS__)
++    // AROS posixc has no pread.
++    long old = ftell(file);
++    if (old < 0) {
++        return SIZE_MAX;
++    }
++    if (fseek(file, static_cast<long>(offset), SEEK_SET) != 0) {
++        return SIZE_MAX;
++    }
++    size_t bytesRead = fread(buffer, 1, count, file);
++    if (fseek(file, old, SEEK_SET) != 0) {
++        return SIZE_MAX;
++    }
++    return bytesRead;
++#else
+     int fd = sk_fileno(file);
+     if (fd < 0) {
+         return SIZE_MAX;
+@@ -126,6 +180,7 @@ size_t sk_qread(FILE* file, void* buffer, size_t count, size_t offset) {
+         return SIZE_MAX;
+     }
+     return bytesRead;
++#endif
+ }
+ 
+ ////////////////////////////////////////////////////////////////////////////

@@ -1,0 +1,45 @@
+Title: 0001-cmake-pthread-flag-optional
+Repository: libwebp
+Base-Version: 1.6.0 (libwebp-1.6.0.tar.gz, sha256 e4ab7009bf0629fd11982d4c2aa83964cf244cffba7347ecd39019a9e38c4564)
+Requires: none
+Author: aros-skia
+Date: 2026-09-24
+Upstream-Status: candidate (generic: probes the flag instead of assuming it)
+Scope: AROS x86_64 ABIv11 static build (GCC 10.5.0). Build system only; no library code changes.
+
+Problem:
+  cmake/deps.cmake appends -pthread to CMAKE_C_FLAGS whenever FindThreads
+  reports pthreads. x86_64-aros-gcc rejects the option ("unrecognized
+  command-line option '-pthread'"), so every later configure check fails
+  (unistd.h and the SSE2/SSE4.1 flag probes report "not found") and every
+  object fails to compile.
+Solution:
+  Add -pthread only when check_c_compiler_flag accepts it. Linking pthreads
+  is still carried by Threads::Threads (-lpthread on AROS, seeded in
+  scripts/deps/aros-x86_64.cmake).
+Validation:
+  2026-09-24, scripts/deps/build.sh libwebp: configure finds unistd.h and
+  SSE2/SSE4.1; libwebp.a, libwebpdecoder.a, libwebpdemux.a, libwebpmux.a,
+  libsharpyuv.a install; the check program links with collect-aros
+  (scripts/deps/check.sh libwebp).
+Removal:
+  When upstream probes the flag itself, or when the AROS compiler accepts
+  -pthread.
+
+--- a/cmake/deps.cmake
++++ b/cmake/deps.cmake
+@@ -41,7 +41,13 @@
+   if(Threads_FOUND)
+     # work around cmake bug on QNX (https://cmake.org/Bug/view.php?id=11333)
+     if(CMAKE_USE_PTHREADS_INIT AND NOT CMAKE_SYSTEM_NAME STREQUAL "QNX")
+-      set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pthread")
++      # Not every pthreads compiler knows -pthread (AROS GCC rejects it and
++      # links pthreads from libpthread.a via Threads::Threads instead).
++      include(CheckCCompilerFlag)
++      check_c_compiler_flag(-pthread WEBP_HAVE_FLAG_PTHREAD)
++      if(WEBP_HAVE_FLAG_PTHREAD)
++        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pthread")
++      endif()
+     endif()
+     list(APPEND WEBP_DEP_LIBRARIES Threads::Threads)
+   endif()

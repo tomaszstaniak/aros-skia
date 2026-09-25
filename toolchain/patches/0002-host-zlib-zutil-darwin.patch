@@ -1,0 +1,10 @@
+Host-only (macOS SDK): zlib's zutil.h in both binutils-2.45/zlib and
+gcc-13.4.0/zlib treats TARGET_OS_MAC as classic Mac OS and redefines fdopen,
+which breaks <_stdio.h>. Same fix as the existing 10.5 toolchain (README.md,
+"The toolchain"). Apply to both extracted trees.
+
+--- a/zlib/zutil.h
++++ b/zlib/zutil.h
+@@
+-#if defined(MACOS) || defined(TARGET_OS_MAC)
++#if defined(MACOS)

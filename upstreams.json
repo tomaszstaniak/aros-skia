@@ -1,0 +1,9 @@
+{
+  "repositories": {
+    "skia-m154": {
+      "url": "https://skia.googlesource.com/skia.git",
+      "commit": "588b550a4dd8af90dbe71c0554852806bd8f0b21",
+      "note": "The Skia commit WebKitGTK 2.54.0 bundles (Source/ThirdParty/skia/README.WebKit)"
+    }
+  }
+}

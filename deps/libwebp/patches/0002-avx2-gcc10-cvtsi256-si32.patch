@@ -1,0 +1,40 @@
+Title: 0002-avx2-gcc10-cvtsi256-si32
+Repository: libwebp
+Base-Version: 1.6.0 (libwebp-1.6.0.tar.gz, sha256 e4ab7009bf0629fd11982d4c2aa83964cf244cffba7347ecd39019a9e38c4564)
+Requires: 0001-cmake-pthread-flag-optional
+Author: aros-skia
+Date: 2026-09-24
+Upstream-Status: candidate (affects any GCC 10 x86_64 build with SIMD on)
+Scope: AROS x86_64 ABIv11 static build with GCC 10.5.0. One AVX2 source file; behaviour unchanged.
+
+Problem:
+  src/dsp/lossless_avx2.c calls _mm256_cvtsi256_si32, which GCC 10.5's
+  avxintrin.h does not declare (the GCC 13.4 AROS toolchain's does). The
+  file compiles with an implicit declaration and libwebp.a then references
+  it as an external function: collect-aros reports
+  "U _mm256_cvtsi256_si32" when linking any WebP encoder/decoder user.
+Solution:
+  For GCC < 11 define it as the equivalent two-intrinsic sequence
+  _mm_cvtsi128_si32(_mm256_castsi256_si128(x)) (low 32 bits of the vector).
+Validation:
+  2026-09-24, scripts/deps/check.sh libwebp: webp-check links through
+  collect-aros with no undefined symbols. Not yet run on AROS.
+Removal:
+  When the AROS toolchain used for ABIv11 is GCC >= 11, or upstream adds
+  the same fallback.
+
+--- a/src/dsp/lossless_avx2.c
++++ b/src/dsp/lossless_avx2.c
+@@ -22,6 +22,12 @@
+ #include "src/dsp/lossless.h"
+ #include "src/webp/format_constants.h"
+ #include "src/webp/types.h"
++
++// _mm256_cvtsi256_si32 is missing from GCC 10 avxintrin.h (GCC 13 has it); the older
++// compiler leaves it undeclared and the object references it as a symbol.
++#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ < 11
++#define _mm256_cvtsi256_si32(x) _mm_cvtsi128_si32(_mm256_castsi256_si128(x))
++#endif
+ 
+ //------------------------------------------------------------------------------
+ // Predictor Transform

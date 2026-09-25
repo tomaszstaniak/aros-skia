@@ -1,0 +1,2 @@
+0001-cmake-pthread-flag-optional.patch
+0002-avx2-gcc10-cvtsi256-si32.patch

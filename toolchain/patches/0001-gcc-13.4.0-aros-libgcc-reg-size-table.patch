@@ -1,0 +1,37 @@
+Drop the libgcc/unwind-dw2.c hunk from tools/crosstools/gnu/gcc-13.4.0-aros.diff
+(deadwood2/AROS e33ca77d).
+
+The hunk wraps __builtin_init_dwarf_reg_size_table() in
+#ifdef MD_FALLBACK_FRAME_STATE_FOR. x86_64 AROS does not define that macro, so
+dwarf_reg_size_table stays zero and the first unwind (any C++ throw,
+_Unwind_Backtrace) fails gcc_assert (size == sizeof(_Unwind_Word)) in
+_Unwind_SetSpColumn (unwind-dw2.c:1134) and calls abort(). The GCC 10.5.0
+AROS diff has no such hunk; neither do the mainline 13.5/15.2/16.2 diffs.
+
+Verified on AROS One x86_64: `try { throw 7; } catch (int)` aborts without
+this change and prints the caught value with it.
+
+diff --git a/tools/crosstools/gnu/gcc-13.4.0-aros.diff b/tools/crosstools/gnu/gcc-13.4.0-aros.diff
+index a5dc5ed..5f5577e 100644
+--- a/tools/crosstools/gnu/gcc-13.4.0-aros.diff
++++ b/tools/crosstools/gnu/gcc-13.4.0-aros.diff
+@@ -1700,19 +1700,6 @@ diff -ruN gcc-13.4.0/libgcc/gthr.h gcc-13.4.0.aros/libgcc/gthr.h
+  #ifndef GTHREAD_USE_WEAK
+  #define GTHREAD_USE_WEAK 1
+  #endif
+-diff -ruN gcc-13.4.0/libgcc/unwind-dw2.c gcc-13.4.0.aros/libgcc/unwind-dw2.c
+---- gcc-13.4.0/libgcc/unwind-dw2.c	2025-06-05 16:03:02.000000000 +0000
+-+++ gcc-13.4.0.aros/libgcc/unwind-dw2.c	2020-12-27 16:58:14.310000000 +0000
+-@@ -1315,7 +1315,9 @@
+- static inline void
+- init_dwarf_reg_size_table (void)
+- {
+-+#ifdef MD_FALLBACK_FRAME_STATE_FOR
+-   __builtin_init_dwarf_reg_size_table (dwarf_reg_size_table);
+-+#endif
+- }
+- 
+- static void __attribute__((noinline))
+ diff -ruN gcc-13.4.0/libgcc/unwind-dw2-fde.c gcc-13.4.0.aros/libgcc/unwind-dw2-fde.c
+ --- gcc-13.4.0/libgcc/unwind-dw2-fde.c	2025-06-05 16:03:02.000000000 +0000
+ +++ gcc-13.4.0.aros/libgcc/unwind-dw2-fde.c	2020-12-27 16:58:14.310000000 +0000
