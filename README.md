@@ -9,6 +9,15 @@ WebKitGTK 2.54 bundles. This repository is the Skia SDK only. It is not a
 WebKit port and makes no claim about WebKit readiness; that integration is
 future work elsewhere.
 
+> **Known ABI issue (2026-09-25): do not treat these packages as ABIv11-compatible yet.**
+> The GCC 13.4.0 toolchain built by `toolchain/build-gcc13.sh` gives
+> `sizeof(wchar_t) == 1`, while the stock ABIv11 compiler (GCC 10.5.0) and
+> the ABIv11 system libraries use 4. Code built with it can disagree with
+> the rest of the system about `wchar_t` and possibly other types. The tests
+> below remain valid for what they exercise, but they do not prove ABI
+> compatibility. A corrected toolchain and rebuilt packages are being
+> prepared; until then this release is experimental.
+
 ## What works
 
 Everything below was run on AROS One x86_64 in QEMU from the packaged SDK.
